@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { NewsGrid } from "@/components/news-grid";
 import { getArticles } from "@/lib/data/articles";
 
