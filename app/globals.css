@@ -1,0 +1,170 @@
+@import "tailwindcss";
+
+:root {
+  --background: #faf9f7;
+  --foreground: #101828;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0e1a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+::selection {
+  background: rgba(79, 70, 229, 0.2);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(148 163 184 / 0.5) transparent;
+}
+
+/* Independent story-column scrollbar (desktop details layout). */
+.story-pane {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(129 140 248 / 0.55) transparent;
+  scrollbar-gutter: stable;
+}
+.story-pane::-webkit-scrollbar {
+  width: 8px;
+}
+.story-pane::-webkit-scrollbar-track {
+  background: transparent;
+}
+.story-pane::-webkit-scrollbar-thumb {
+  background: rgb(129 140 248 / 0.35);
+  border-radius: 999px;
+}
+.story-pane::-webkit-scrollbar-thumb:hover {
+  background: rgb(129 140 248 / 0.6);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Signature "Newz signal" loader + route enter transition. */
+
+@keyframes newz-eq {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.newz-eq-bar {
+  transform-origin: bottom;
+  animation: newz-eq 0.9s ease-in-out infinite;
+}
+.newz-eq-delay-0 {
+  animation-delay: 0ms;
+}
+.newz-eq-delay-1 {
+  animation-delay: 150ms;
+}
+.newz-eq-delay-2 {
+  animation-delay: 300ms;
+}
+
+@keyframes newz-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.8);
+  }
+}
+
+.newz-dot {
+  animation: newz-dot 1.2s ease-in-out infinite;
+}
+
+@keyframes newz-ellipsis {
+  0% {
+    content: "";
+  }
+  25% {
+    content: ".";
+  }
+  50% {
+    content: "..";
+  }
+  75%,
+  100% {
+    content: "…";
+  }
+}
+
+/* Applied to an empty trailing span; cycles . .. … after the caption. */
+.newz-ellipsis::after {
+  content: "…";
+  animation: newz-ellipsis 1.2s steps(1) infinite;
+}
+
+@keyframes newz-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.newz-enter {
+  animation: newz-enter 180ms ease-out;
+}
+
+/* Calm skeleton shimmer (replaces harsh animate-pulse flashing). */
+@keyframes newz-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.newz-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.newz-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgb(148 163 184 / 0.12) 50%,
+    transparent 80%
+  );
+  animation: newz-shimmer 2.2s ease-in-out infinite;
+}

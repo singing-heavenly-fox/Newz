@@ -1,0 +1,346 @@
+================================================================================
+NEWZ — HOURLY FREE SCRAPING + ANALYSIS SETUP GUIDE
+================================================================================
+
+Purpose: Activate automatic hourly article scraping (RSS + Cheerio, $0 cost)
+and AI analysis on your deployed Vercel app. All code is already implemented;
+this guide covers the manual setup steps only you can perform.
+
+Prerequisites:
+- GitHub account with this repo pushed
+- Vercel account (free Hobby plan)
+- Supabase account with a project created
+- Google AI Studio account (free API key, no credit card)
+
+================================================================================
+STEP 1 — DEPLOY TO VERCEL (FREE HOBBY)
+================================================================================
+
+1. Push this repository to GitHub (git add, commit, push to your GitHub repo).
+2. Go to https://vercel.com and log in.
+3. Click "Add New Project" → "Import" → select your GitHub repo.
+4. Framework preset: Next.js (auto-detected). Leave build settings at defaults.
+5. Click "Deploy".
+6. After deployment completes, note your production URL, e.g.:
+   https://newz-abc123.vercel.app
+   (You will need this URL in Steps 2 and 4.)
+
+Do NOT add environment variables yet — do that in Step 2, then redeploy.
+
+================================================================================
+STEP 2 — SET VERCEL ENVIRONMENT VARIABLES (PRODUCTION)
+================================================================================
+
+1. In your Vercel dashboard, open your project.
+2. Go to Settings → Environment Variables.
+3. Add each variable below. Environment = Production (and Preview if desired).
+4. After adding all variables, go to the Deployments tab and click "Redeploy"
+   on the latest production deployment so the new variables take effect.
+
+Variables to add (exact names, case-sensitive):
+
+-------------------------------------------------------------------------------
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+-------------------------------------------------------------------------------
+Value: Your Clerk publishable key (pk_...).
+Source: Clerk Dashboard → Your project → API Keys → Publishable key.
+Exposure: Client + server.
+
+-------------------------------------------------------------------------------
+CLERK_SECRET_KEY
+-------------------------------------------------------------------------------
+Value: Your Clerk secret key (sk_...).
+Source: Clerk Dashboard → Your project → API Keys → Secret key.
+Exposure: Server only.
+
+-------------------------------------------------------------------------------
+NEXT_PUBLIC_CLERK_SIGN_IN_URL
+-------------------------------------------------------------------------------
+Value: /sign-in
+
+-------------------------------------------------------------------------------
+NEXT_PUBLIC_CLERK_SIGN_UP_URL
+-------------------------------------------------------------------------------
+Value: /sign-up
+
+-------------------------------------------------------------------------------
+NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL
+-------------------------------------------------------------------------------
+Value: /
+
+-------------------------------------------------------------------------------
+NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL
+-------------------------------------------------------------------------------
+Value: /
+
+-------------------------------------------------------------------------------
+NEXT_PUBLIC_SUPABASE_URL
+-------------------------------------------------------------------------------
+Value: Your Supabase project URL, e.g. https://abcdefghijklmnop.supabase.co
+Source: Supabase Dashboard → Project Settings → API → Project URL.
+Exposure: Client + server.
+
+-------------------------------------------------------------------------------
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+-------------------------------------------------------------------------------
+Value: Your Supabase anon (public) API key.
+Source: Supabase Dashboard → Project Settings → API → Project API keys →
+       anon public key.
+Exposure: Client + server.
+
+-------------------------------------------------------------------------------
+SUPABASE_SERVICE_ROLE_KEY
+-------------------------------------------------------------------------------
+Value: Your Supabase service role API key.
+Source: Supabase Dashboard → Project Settings → API → Project API keys →
+       service_role secret key.
+Exposure: SERVER ONLY. Never expose to browser.
+
+-------------------------------------------------------------------------------
+GOOGLE_GENERATIVE_AI_API_KEY
+-------------------------------------------------------------------------------
+Value: Your Google Gemini API key.
+Source: https://aistudio.google.com/apikey → Create API key (free tier,
+        no credit card required).
+Exposure: Server only.
+
+-------------------------------------------------------------------------------
+BIASLY_ADMIN_SECRET
+-------------------------------------------------------------------------------
+Value: Any strong random string, e.g. a 32+ character password.
+       Use the same value in GitHub Actions secrets (Step 4).
+       Generate one: openssl rand -hex 32
+Exposure: SERVER ONLY. Used as the x-biasly-admin-secret header on
+         /api/scrape-free and /api/analyze.
+
+-------------------------------------------------------------------------------
+IMPORTANT — DO NOT ADD:
+-------------------------------------------------------------------------------
+- CRON_SECRET : Vercel injects this automatically on cron requests. Do not
+  add it to .env.local or Vercel env vars.
+- OXY_WSA_USERNAME / OXY_WSA_PASSWORD : Oxylabs credentials. Not needed for
+  the free RSS+Cheerio pipeline.
+
+================================================================================
+STEP 3 — APPLY SUPABASE SCHEMA AND SEED SOURCES
+================================================================================
+
+1. Go to https://supabase.com and open your project.
+2. In the left sidebar, click SQL Editor → New query.
+3. Copy the ENTIRE contents of the file:
+   supabase/schema.sql
+   Paste it into the SQL Editor and click "Run".
+   Expected result: success message. Tables created: sources, articles,
+   article_analyses, logs, source_feeds, oxylabs_schedules,
+   oxylabs_schedule_runs, plus RLS policies and indexes.
+
+4. Open another New query tab.
+5. Copy the ENTIRE contents of the file:
+   supabase/seed-sources.sql
+   Paste it and click "Run".
+
+6. At the bottom of seed-sources.sql there is a verification query:
+   select name, listing_url, parser_strategy, rss_feed_url, is_active
+   from public.sources order by name;
+   Confirm it returns exactly 5 rows:
+     Reuters        https://www.reuters.com        rss_feed_url set
+     NPR            https://www.npr.org            rss_feed_url set
+     BBC News       https://www.bbc.com/news       rss_feed_url set
+     Fox News       https://www.foxnews.com        rss_feed_url set
+     The Guardian   https://www.theguardian.com/us rss_feed_url set
+   All should have is_active = true and rss_feed_url populated.
+
+If any source has rss_feed_url = NULL, that source will be skipped during
+scraping with a logged reason. The seed file backfills verified RSS URLs
+for all 5 sources.
+
+================================================================================
+STEP 4 — ADD GITHUB REPOSITORY SECRETS
+================================================================================
+
+The free pipeline runs hourly via GitHub Actions (no Vercel Pro needed,
+because Vercel Hobby allows cron only once per day). GitHub Actions calls
+your deployed Vercel endpoints every hour at :15 UTC.
+
+1. On GitHub, open your repository.
+2. Go to Settings → Secrets and variables → Actions.
+3. Click "New repository secret" and add:
+
+-------------------------------------------------------------------------------
+Secret name: APP_URL
+-------------------------------------------------------------------------------
+Value: Your Vercel production URL with NO trailing slash.
+Example: https://newz-abc123.vercel.app
+(Do NOT add / at the end.)
+
+-------------------------------------------------------------------------------
+Secret name: BIASLY_ADMIN_SECRET
+-------------------------------------------------------------------------------
+Value: The exact same string you set as BIASLY_ADMIN_SECRET in Vercel env
+       vars (Step 2).
+
+4. Save both secrets.
+
+================================================================================
+STEP 5 — ENABLE AND TEST THE GITHUB ACTIONS WORKFLOW
+================================================================================
+
+1. On GitHub, open your repository.
+2. Click the "Actions" tab at the top.
+3. On the left sidebar, find and click the workflow named:
+   "Hourly free pipeline"
+4. Click the "Run workflow" dropdown → "Run workflow".
+5. Leave defaults (branch: main/master) and click the green "Run workflow"
+   button.
+
+What happens:
+- Job "pipeline" runs on ubuntu-latest.
+- Step 1: POST scrape to your Vercel /api/scrape-free (limitPerSource: 5).
+- Step 2: POST analyze to your Vercel /api/analyze (all pending articles).
+- Each step has a 10-minute timeout; expected total ~2–3 minutes.
+
+After the workflow completes:
+- Click the workflow run to view logs.
+- You should see scrape output (candidates found, articles inserted) and
+  analyze output (articles analyzed, sentiment/framing labels).
+
+Going forward:
+- The workflow triggers AUTOMATICALLY every hour at :15 UTC via
+  `on: schedule: cron: "15 * * * *"`.
+- It also runs on `workflow_dispatch` (manual trigger) whenever you click
+  "Run workflow".
+
+================================================================================
+MANUAL TEST COMMANDS (CURL)
+================================================================================
+
+Replace <your-app>.vercel.app and <BIASLY_ADMIN_SECRET> with your values.
+
+-------------------------------------------------------------------------------
+Test A — Manual scrape (expect 200 + JSON summary)
+-------------------------------------------------------------------------------
+curl -X POST https://<your-app>.vercel.app/api/scrape-free \
+  -H "x-biasly-admin-secret: <BIASLY_ADMIN_SECRET>" \
+  -H "Content-Type: application/json" \
+  -d '{"limitPerSource": 3}'
+
+Expected JSON includes:
+  status, sourcesChecked, feedsChecked, candidatesFound,
+  candidatesRejected, duplicatesSkipped, detailPagesScraped,
+  articlesInserted (>= 1 on first run), articlesRejected,
+  articlesFailed, totalDurationMs, rejectionReasons, sourceErrors,
+  insertedIds
+
+-------------------------------------------------------------------------------
+Test B — Manual analyze (expect 200 + analysis summary)
+-------------------------------------------------------------------------------
+curl -X POST https://<your-app>.vercel.app/api/analyze \
+  -H "x-biasly-admin-secret: <BIASLY_ADMIN_SECRET>" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+
+Expected JSON includes:
+  status, pendingFound, analyzed, skipped, failed,
+  totalDurationMs, model, errors
+
+-------------------------------------------------------------------------------
+Test C — Negative test: missing secret (expect 401)
+-------------------------------------------------------------------------------
+curl -X POST https://<your-app>.vercel.app/api/scrape-free \
+  -H "Content-Type: application/json" \
+  -d '{"limitPerSource": 1}'
+
+Expected: HTTP 401 with {"error":"Unauthorized"}
+
+-------------------------------------------------------------------------------
+Test D — Idempotency: re-run Test A (expect 0 new inserts)
+-------------------------------------------------------------------------------
+Run Test A again immediately.
+Expected: articlesInserted: 0, duplicatesSkipped > 0.
+
+================================================================================
+VERIFY IN SUPABASE TABLE EDITOR
+================================================================================
+
+1. Supabase Dashboard → Table Editor.
+2. Table "articles": confirm rows exist with title, image_url, published_at,
+   raw_text (reads like one article, not a webpage dump), analyzed_at = null
+   (until analysis runs).
+3. Table "article_analyses": after analyze runs, confirm rows exist with
+   summary, sentiment_label, bias_label, left_percentage,
+   center_percentage, right_percentage (sum = 100), confidence,
+   framing_notes, loaded_terms, disclaimer, model.
+4. Table "logs": confirm rows with source = 'scrape-free' and source =
+   'analyze' appear after each run.
+
+================================================================================
+HOW THE HOURLY PIPELINE WORKS (ARCHITECTURE)
+================================================================================
+
+Vercel Hobby cron limit: once per day max. Hourly expressions fail deploy.
+Therefore:
+
+- Vercel daily crons (vercel.json):
+    /api/cron/scrape-free   at 2:15 UTC daily (limit 2 per source)
+    /api/cron/analyze-free  at 3:45 UTC daily
+  These remain as a free daily fallback.
+
+- GitHub Actions hourly (free, unlimited schedule on public repos):
+    .github/workflows/hourly-pipeline.yml
+    cron: "15 * * * *"   (every hour at :15 UTC)
+    Steps: scrape (limitPerSource: 5) → analyze (all pending)
+
+Idempotency:
+- Scrape dedupes by original_url (chunks of ≤15 per .in() call per AGENTS §9).
+- Re-scraping inserts 0 new rows; reports duplicatesSkipped.
+- Analyze uses LEFT JOIN on article_analyses: only articles without an
+  analysis row are processed. Already-analyzed articles are skipped.
+
+Cost: $0.
+- GitHub Actions: ~2 min/hour ≈ 1,440 min/month, within the 2,000 min free
+  allowance for public repos.
+- No Oxylabs credentials needed (RSS + Cheerio scraping).
+- Gemini free tier: daily reset, no credit card.
+
+================================================================================
+FILES ALREADY IN PLACE (NO ACTION NEEDED)
+================================================================================
+
+lib/free-scrape/pipeline.ts      # scrape-to-insert orchestrator
+lib/free-scrape/rss.ts           # RSS fetch + XML parse
+lib/free-scrape/fetch.ts         # polite HTML fetch with UA + timeout
+lib/free-scrape/parse.ts         # Cheerio article parser
+lib/free-scrape/validate.ts      # candidate URL check + content gate
+lib/free-scrape/types.ts         # shared TS types
+lib/analysis/pipeline.ts         # AI analysis orchestration (Gemini)
+app/api/scrape-free/route.ts     # POST manual scrape (admin secret)
+app/api/analyze/route.ts         # POST manual analyze (admin secret)
+app/api/cron/scrape-free/route.ts   # GET daily scrape cron
+app/api/cron/analyze-free/route.ts  # GET daily analyze cron
+app/api/cron/pipeline-free/route.ts # GET combined manual trigger
+vercel.json                      # daily Vercel crons
+.github/workflows/hourly-pipeline.yml # hourly GitHub Actions scheduler
+supabase/schema.sql              # full schema + RLS + grants
+supabase/seed-sources.sql        # 5 active sources + RSS URLs
+supabase/migration_add_rss_column.sql # rerunnable ALTER for rss_feed_url
+supabase/migration_add_source_feeds.sql # rerunnable source_feeds table
+lib/supabase/types.ts            # TS row types mirroring schema
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+- 401 on scrape/analyze: BIASLY_ADMIN_SECRET mismatch between Vercel env
+  and the header you send. Double-check exact string (no trailing spaces).
+- articlesInserted = 0 on first run: check Supabase sources table —
+  rss_feed_url may be NULL for that source, or the RSS feed returned 0 items.
+- Analysis status "failed" with missing-google-key: GOOGLE_GENERATIVE_AI_API_KEY
+  not set in Vercel or not redeployed after adding it.
+- Build fails: run `npm run typecheck` and `npm run lint` locally first.
+- GitHub Actions workflow not showing: confirm the .yml file is committed and
+  pushed to the default branch; check the Actions tab for workflow_dispatch
+  availability.
+
+================================================================================
+END OF GUIDE
+================================================================================

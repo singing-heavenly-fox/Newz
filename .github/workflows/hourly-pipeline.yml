@@ -1,0 +1,44 @@
+# Hourly free pipeline (scrape then analyze) — no Vercel Pro needed.
+#
+# Why this exists: Vercel's free Hobby plan runs cron jobs at most ONCE PER
+# DAY (hourly expressions fail deployment). This workflow calls the already
+# deployed route handlers every hour instead — free on GitHub (each run is
+# ~2 min; ~1,440 min/month of the 2,000 min free allowance).
+#
+# ONE-TIME SETUP (dormant until you do this):
+# 1. Deploy the app to Vercel (production URL, e.g. https://newz.vercel.app).
+# 2. GitHub repo → Settings → Secrets and variables → Actions → New secret:
+#    - APP_URL = production URL with NO trailing slash
+#    - BIASLY_ADMIN_SECRET = same value as in .env.local / Vercel env
+# 3. Actions tab → "Hourly free pipeline" → Run workflow (manual test).
+#
+# The Vercel daily crons in vercel.json stay as a fallback; both paths are
+# idempotent (dedupe + pending-check), so overlapping runs are harmless.
+
+name: Hourly free pipeline
+
+on:
+  schedule:
+    - cron: "15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Scrape (up to 5 per source)
+        run: |
+          echo "POST ${{ secrets.APP_URL }}/api/scrape-free"
+          curl --fail --show-error --max-time 600 -X POST "${{ secrets.APP_URL }}/api/scrape-free" \
+            -H "x-biasly-admin-secret: ${{ secrets.BIASLY_ADMIN_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d '{"limitPerSource": 5}'
+
+      - name: Analyze all pending
+        run: |
+          echo "POST ${{ secrets.APP_URL }}/api/analyze"
+          curl --fail --show-error --max-time 600 -X POST "${{ secrets.APP_URL }}/api/analyze" \
+            -H "x-biasly-admin-secret: ${{ secrets.BIASLY_ADMIN_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
